@@ -200,6 +200,22 @@ module.exports = class Curation {
           "12345"
         );
         break;
+      case "ORDER":
+          response = Response.genQuickReply(i18n.__("curation.price"), [
+          {
+            title: "~ $20",
+            payload: "CURATION_BUDGET_20_PARTY"
+          },
+          {
+            title: "~ $30",
+            payload: "CURATION_BUDGET_30_PARTY"
+          },
+          {
+            title: "+ $50",
+            payload: "CURATION_BUDGET_50_PARTY"
+          }
+        ]);
+        break;
     }
 
     return response;

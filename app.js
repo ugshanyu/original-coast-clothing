@@ -24,6 +24,40 @@ const express = require("express"),
 
 var users = {};
 
+const socket = require('socket.io-client')('http://202.70.34.27:8081');
+
+socket.on('connect', () => {
+    console.log('Connected to the server via Socket.IO!');
+});
+
+socket.on('my_response_all_at_once', (data) => {
+  // console.log("data", data)
+  let requestBody = {
+    recipient: {
+      id: data['user_id']
+    },
+    message: {text:data['data'] ? data['data'] : 'empty'}
+  };
+  GraphApi.callSendApi(requestBody);
+});
+
+// recipient: {
+//   user_ref: this.user.psid
+// },
+// message: response,
+// persona_id: persona_id
+
+socket.on('disconnect', () => {
+    console.log('Disconnected from the server.');
+});
+
+// const dataToSend = {
+//   id: "Usion",
+//   data: "Мөнх"
+// };
+
+// socket.emit('all_at_once', dataToSend);
+
 // Parse application/x-www-form-urlencoded
 app.use(
   urlencoded({
@@ -68,6 +102,12 @@ app.get("/webhook", (req, res) => {
 
 // Create the endpoint for your webhook
 app.post("/webhook", (req, res) => {
+
+  // var Profile = require("./services/profile.js");
+  // Profile = new Profile();
+  // Profile.setGetStarted()
+  // console.log("reqreqreqreqreq",req)
+  // console.log("resresresresres",res)
   let body = req.body;
 
   console.log(`\u{1F7EA} Received webhook:`);
@@ -80,28 +120,28 @@ app.post("/webhook", (req, res) => {
 
     // Iterate over each entry - there may be multiple if batched
     body.entry.forEach(async function (entry) {
-      if ("changes" in entry) {
-        // Handle Page Changes event
-        let receiveMessage = new Receive();
-        if (entry.changes[0].field === "feed") {
-          let change = entry.changes[0].value;
-          switch (change.item) {
-            case "post":
-              return receiveMessage.handlePrivateReply(
-                "post_id",
-                change.post_id
-              );
-            case "comment":
-              return receiveMessage.handlePrivateReply(
-                "comment_id",
-                change.comment_id
-              );
-            default:
-              console.warn("Unsupported feed change type.");
-              return;
-          }
-        }
-      }
+      // if ("changes" in entry) {
+      //   // Handle Page Changes event
+      //   let receiveMessage = new Receive();
+      //   if (entry.changes[0].field === "feed") {
+      //     let change = entry.changes[0].value;
+      //     switch (change.item) {
+      //       case "post":
+      //         return receiveMessage.handlePrivateReply(
+      //           "post_id",
+      //           change.post_id
+      //         );
+      //       case "comment":
+      //         return receiveMessage.handlePrivateReply(
+      //           "comment_id",
+      //           change.comment_id
+      //         );
+      //       default:
+      //         console.warn("Unsupported feed change type.");
+      //         return;
+      //     }
+      //   }
+      // }
 
       // Iterate over webhook events - there may be multiple
       entry.messaging.forEach(async function (webhookEvent) {
@@ -121,14 +161,15 @@ app.post("/webhook", (req, res) => {
 
         // Get the sender PSID
         let senderPsid = webhookEvent.sender.id;
+        // console.log("users", users)
         // Get the user_ref if from Chat plugin logged in user
-        let user_ref = webhookEvent.sender.user_ref;
+        // let user_ref = webhookEvent.sender.user_ref;
         // Check if user is guest from Chat plugin guest user
         let guestUser = isGuestUser(webhookEvent);
-
         if (senderPsid != null && senderPsid != undefined) {
           if (!(senderPsid in users)) {
             if (!guestUser) {
+              console.log("Нэвтэрсэн хэрэглэгч")
               // Make call to UserProfile API only if user is not guest
               let user = new User(senderPsid);
               GraphApi.getUserProfile(senderPsid)
@@ -140,27 +181,24 @@ app.post("/webhook", (req, res) => {
                   console.log(JSON.stringify(body));
                   console.log("Profile is unavailable:", error);
                 })
-                .finally(() => {
-                  console.log("locale: " + user.locale);
+                .finally(async () => {
                   users[senderPsid] = user;
-                  i18n.setLocale("en_US");
-                  console.log(
-                    "New Profile PSID:",
-                    senderPsid,
-                    "with locale:",
-                    i18n.getLocale()
-                  );
-                  return receiveAndReturn(
+                  // i18n.setLocale("en_US");
+                  return await receiveAndReturn(
                     users[senderPsid],
                     webhookEvent,
-                    false
+                    false,
+                    socket,
+                    users
                   );
                 });
             } else {
+              console.log("GuestUser")
               setDefaultUser(senderPsid);
-              return receiveAndReturn(users[senderPsid], webhookEvent, false);
+              return receiveAndReturn(users[senderPsid], webhookEvent, false, socket, users);
             }
           } else {
+            console.log("Мэддэг хэрэглэгч")
             i18n.setLocale(users[senderPsid].locale);
             console.log(
               "Profile already exists PSID:",
@@ -168,13 +206,15 @@ app.post("/webhook", (req, res) => {
               "with locale:",
               i18n.getLocale()
             );
-            return receiveAndReturn(users[senderPsid], webhookEvent, false);
+            console.log("users[senderPsid]", users[senderPsid])
+            return receiveAndReturn(users[senderPsid], webhookEvent, false, socket, users);
           }
-        } else if (user_ref != null && user_ref != undefined) {
-          // Handle user_ref
-          setDefaultUser(user_ref);
-          return receiveAndReturn(users[user_ref], webhookEvent, true);
-        }
+        } 
+        // else if (user_ref != null && user_ref != undefined) {
+        //   // Handle user_ref
+        //   setDefaultUser(user_ref);
+        //   return receiveAndReturn(users[user_ref], webhookEvent, true, socket);
+        // }
       });
     });
   } else {
@@ -201,9 +241,9 @@ function isGuestUser(webhookEvent) {
   return guestUser;
 }
 
-function receiveAndReturn(user, webhookEvent, isUserRef) {
+async function receiveAndReturn(user, webhookEvent, isUserRef, socket, users) {
   let receiveMessage = new Receive(user, webhookEvent, isUserRef);
-  return receiveMessage.handleMessage();
+  return await receiveMessage.handleMessage(socket, users);
 }
 
 // Set up your App's Messenger Profile

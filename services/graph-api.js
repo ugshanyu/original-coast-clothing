@@ -16,12 +16,96 @@ const config = require("./config"),
   { URL, URLSearchParams } = require("url");
 
 module.exports = class GraphApi {
+
+//   static async getUserMessageId(userIdInput) {
+//     let url = new URL(`${config.apiUrl}/${config.pageId}/conversations`);
+//     url.search = new URLSearchParams({
+//       access_token: 'EAAF73V712WkBO98u17GdcmN2MiZAqFK7KDTYp0DGOrHtfH4GEFO1PfbzzIkuZBOXjx4qAer38B4xqiTcr1qIG3asoPdy5zpszjPV3VQqERi1tIwhGZB7QVZAhQ9Uz8NbZCKuZBY4P8OWmncoFDEodQV2NhpiyvtR99wWJJGkgpEc0S55Rs1NtziTJyBqMJa3B9',
+//       platform: "messenger",
+//       user_id: userIdInput
+//     });
+//     try {
+//       const response = await fetch(url);
+//       if (response.ok) {
+//           const data = await response.json();
+//           let userId = data['data'][0]['id']
+//           return userId
+//       } else {
+//           throw new Error(`Failed to fetch conversations: ${response.status} ${response.statusText}`);
+//       }
+//     } catch (error) {
+//         console.error('Error fetching conversations:', error);
+//     }
+//   }
+
+//   static async getUserConversation(conversationId) {
+//     let url = new URL(`${config.apiUrl}/${conversationId}`);
+//     url.search = new URLSearchParams({
+//       access_token: 'EAAF73V712WkBO98u17GdcmN2MiZAqFK7KDTYp0DGOrHtfH4GEFO1PfbzzIkuZBOXjx4qAer38B4xqiTcr1qIG3asoPdy5zpszjPV3VQqERi1tIwhGZB7QVZAhQ9Uz8NbZCKuZBY4P8OWmncoFDEodQV2NhpiyvtR99wWJJGkgpEc0S55Rs1NtziTJyBqMJa3B9',
+//       fields: "messages.limit(3){id}", // Requesting the last 5 messages and only their IDs
+//       // fields: "messages"
+//       // platform: 'messenger',
+//       // user_id: '7578764405496093'
+//     });
+//     try {
+//       const response = await fetch(url);
+//       if (response.ok) {
+//           const data = await response.json();
+//           // console.log("const data",data)
+//           const messageIds = data.messages.data.map(msg => msg.id); // Extracting message IDs
+//           // console.log("Fetched Message IDs:", messageIds);
+//           return messageIds; // Returning only the message IDs
+//       } else {
+//           throw new Error(`Failed to fetch conversations: ${response.status} ${response.statusText}`);
+//       }
+//     } catch (error) {
+//         console.error('Error fetching conversations:', error);
+//     }
+//   }
+
+//   static async getMessages(messageIds) {
+//     const final_list = [];
+
+//     // Create an array of promises for each message ID fetch operation
+//     const promises = messageIds.map(id => {
+//         let url = new URL(`${config.apiUrl}/${id}`);
+//         url.search = new URLSearchParams({
+//             access_token: 'EAAF73V712WkBO98u17GdcmN2MiZAqFK7KDTYp0DGOrHtfH4GEFO1PfbzzIkuZBOXjx4qAer38B4xqiTcr1qIG3asoPdy5zpszjPV3VQqERi1tIwhGZB7QVZAhQ9Uz8NbZCKuZBY4P8OWmncoFDEodQV2NhpiyvtR99wWJJGkgpEc0S55Rs1NtziTJyBqMJa3B9',
+//             fields: "message,from"
+//             // additional parameters can be included here if necessary
+//         });
+
+//         // Return fetch promise
+//         return fetch(url)
+//             .then(response => {
+//                 if (!response.ok) {
+//                     throw new Error(`HTTP error! Status: ${response.status}`);
+//                 }
+//                 return response.json();
+//             })
+//             // .then(messageDetails => {
+//             //     console.log("Message Details:", messageDetails);
+//             //     return messageDetails; // return details to be included in final_list
+//             // })
+//             .catch(error => {
+//                 console.error('Error fetching message details for ID:', id, error);
+//                 return null; // Optionally return null or similar if there's an error
+//             });
+//     });
+
+//     // Wait for all promises to resolve and then return the results
+//     const results = await Promise.all(promises);
+//     console.log("All messages have been fetched.");
+//     return results.filter(result => result !== null); // Filter out any null results due to errors
+// }
+
   static async callSendApi(requestBody) {
     let url = new URL(`${config.apiUrl}/me/messages`);
     url.search = new URLSearchParams({
       access_token: config.pageAccesToken
     });
-    console.warn("Request body is\n" + JSON.stringify(requestBody));
+    console.log("Profile")
+    console.log("Profile")
     console.warn("Request body is\n" + JSON.stringify(requestBody));
     let response = await fetch(url, {
       method: "POST",

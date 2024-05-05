@@ -17,6 +17,8 @@ const Curation = require("./curation"),
   Care = require("./care"),
   Survey = require("./survey"),
   GraphApi = require("./graph-api"),
+  Profile = require("./profile"),
+  Groq = require("./groq"),
   i18n = require("../i18n.config"),
   config = require("./config");
 
@@ -29,21 +31,20 @@ module.exports = class Receive {
 
   // Check if the event is a message or postback and
   // call the appropriate handler function
-  handleMessage() {
+  async handleMessage(socket, users) {
     let event = this.webhookEvent;
-
+    console.log(Profile)
+    // Profile.setPersistentMenu()
     let responses;
-
     try {
       if (event.message) {
         let message = event.message;
-
         if (message.quick_reply) {
           responses = this.handleQuickReply();
         } else if (message.attachments) {
           responses = this.handleAttachmentMessage();
         } else if (message.text) {
-          responses = this.handleTextMessage();
+          responses = await this.handleTextMessage(users, socket);
         }
       } else if (event.postback) {
         responses = this.handlePostback();
@@ -65,67 +66,76 @@ module.exports = class Receive {
     if (Array.isArray(responses)) {
       let delay = 0;
       for (let response of responses) {
-        this.sendMessage(response, delay * 2000, this.isUserRef);
+        this.sendMessage(response, delay * 2000, this.isUserRef, socket, users);
         delay++;
       }
     } else {
-      this.sendMessage(responses, this.isUserRef);
+      this.sendMessage(responses, this.isUserRef, socket, users);
     }
   }
 
   // Handles messages events with text
-  handleTextMessage() {
-    console.log(
-      "Received text:",
-      `${this.webhookEvent.message.text} for ${this.user.psid}`
-    );
-
+  async handleTextMessage(users, socket) {
+    // console.log("Received text:",`${this.webhookEvent.message.text} for ${this.user.psid}`);
+    
     let event = this.webhookEvent;
 
     // check greeting is here and is confident
     let greeting = this.firstEntity(event.message.nlp, "greetings");
     let message = event.message.text.trim().toLowerCase();
 
-    let response;
+    let context = "";
+    let send_message = ""
+    if (users[this.user.psid] && users[this.user.psid].message && users[this.user.psid].message.length > 0) {
+        // Get the last 3 messages or less if fewer are available
+        let history = users[this.user.psid].message.slice(-3);
+        context = history.map(msg => `user: \n${msg.received} \nassistant: \n${msg.response}`).join("\n");
+    }
+    let formattedMessage = context + "\nuser: \n" + message;
+    if(users[this.user.psid]['status'] == "require_order_number"){
+      console.log("1")
+      send_message = await Groq.extract_order_info(formattedMessage)
+      if(send_message != "AGAIN"){
+        users[this.user.psid]['status'] = ""
+      }
+      if(send_message == "NONE"){
+        console.log("2")
+        let classified = await Groq.returnCompletion(formattedMessage)
+        console.log("classified", classified)
+        send_message = await Groq.return_related_info(this.user.psid, formattedMessage, classified, socket, users)
+      } else if (send_message == "AGAIN"){
 
-    if (
-      (greeting && greeting.confidence > 0.8) ||
-      message.includes("start over")
-    ) {
-      response = Response.genNuxMessage(this.user);
-    } else if (Number(message)) {
-      response = Order.handlePayload("ORDER_NUMBER");
-    } else if (message.includes("#")) {
-      response = Survey.handlePayload("CSAT_SUGGESTION");
-    } else if (message.includes(i18n.__("care.help").toLowerCase())) {
-      let care = new Care(this.user, this.webhookEvent);
-      response = care.handlePayload("CARE_HELP");
+      } else {
+        send_message = `check_order_info(${send_message}, token)` 
+      }
     } else {
-      response = [
-        Response.genText(
-          i18n.__("fallback.any", {
-            message: event.message.text
-          })
-        ),
-        Response.genText(i18n.__("get_started.guidance")),
-        Response.genQuickReply(i18n.__("get_started.help"), [
-          {
-            title: i18n.__("menu.suggestion"),
-            payload: "CURATION"
-          },
-          {
-            title: i18n.__("menu.help"),
-            payload: "CARE_HELP"
-          },
-          {
-            title: i18n.__("menu.product_launch"),
-            payload: "PRODUCT_LAUNCH"
-          }
-        ])
-      ];
+      console.log("2")
+      let classified = await Groq.returnCompletion(formattedMessage)
+      console.log("classified", classified)
+      send_message = await Groq.return_related_info(this.user.psid, formattedMessage, classified, socket, users)
+    }
+    console.log("send_message", send_message)
+    // let response = Response.genText(send_message)
+    // let response = [Response.genText(await Groq.returnCompletion(message))]
+    // console.log("messagemessagemessage", message)
+    // console.log("responseresponseresponse", response["text"])
+    // console.log("users", users)
+    // users[this.user.psid]
+
+    if (users[this.user.psid]) {
+      // Initialize the message list if it does not exist
+      if (!users[this.user.psid].message) {
+          users[this.user.psid].message = [];
+      }
+      // Append new object to the message list
+      users[this.user.psid].message.push({
+          received: message,
+          response: send_message
+      });
+      // console.log("users[this.user.psid]", users[this.user.psid])
     }
 
-    return response;
+    return Response.genText(send_message);
   }
 
   // Handles mesage events with attachments
@@ -328,7 +338,33 @@ module.exports = class Receive {
     GraphApi.callSendApi(requestBody);
   }
 
-  sendMessage(response, delay = 0, isUserRef) {
+  sendMessage(response, delay = 0, isUserRef, socket, users) {
+    // const delay = 1000; // Delay in milliseconds
+    // setTimeout(async () => {
+    //     const messageIds = await GraphApi.getUserConversation(this.user.psid);
+
+    //     if (messageIds) {
+    //         GraphApi.getMessages(messageIds);
+    //     }
+    // }, delay);
+    // setTimeout(async () => {
+    //   let messageSessionId = await GraphApi.getUserMessageId(this.user.psid);
+    //   // console.log("messageSessionId", messageSessionId)
+    //   let x = await GraphApi.getUserConversation(messageSessionId);
+    //   let y = await GraphApi.getMessages(x);
+    //   console.log("y", y[1])
+    //   const dataToSend = {
+    //     id: "Usion",
+    //     data: y[1]['message'],
+    //     user_id: y[1]['from']['id']
+    //   };
+    //   socket.emit('all_at_once_userId', dataToSend);
+    //   // socket.emit('all_at_once', dataToSend);
+    //   // GraphApi.callSendApi(requestBody)
+    //   // console.log("y", y)
+    // }, delay);
+    // setTimeout(() => GraphApi.getMessages(this.user.psid), delay);
+    // GraphApi.getUserConversations(this.user.psid)
     // Check if there is delay in the response
     if (response === undefined || response === null) {
       return;
@@ -343,7 +379,7 @@ module.exports = class Receive {
       // For chat plugin
       requestBody = {
         recipient: {
-          user_ref: this.user.psid
+          id: this.user.psid
         },
         message: response
       };
@@ -364,7 +400,7 @@ module.exports = class Receive {
         // For chat plugin
         requestBody = {
           recipient: {
-            user_ref: this.user.psid
+            id: this.user.psid
           },
           message: response,
           persona_id: persona_id
@@ -382,7 +418,6 @@ module.exports = class Receive {
     // Mitigate restriction on Persona API
     // Persona API does not work for people in EU, until fixed is safer to not use
     delete requestBody["persona_id"];
-
     setTimeout(() => GraphApi.callSendApi(requestBody), delay);
   }
 

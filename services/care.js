@@ -27,25 +27,29 @@ module.exports = class Care {
 
     switch (payload) {
       case "CARE_HELP":
-        response = Response.genQuickReply(
-          i18n.__("care.prompt", {
-            userFirstName: this.user.firstName
-          }),
-          [
-            {
-              title: i18n.__("care.order"),
-              payload: "CARE_ORDER"
-            },
-            {
-              title: i18n.__("care.billing"),
-              payload: "CARE_BILLING"
-            },
-            {
-              title: i18n.__("care.other"),
-              payload: "CARE_OTHER"
-            }
-          ]
-        );
+        
+        response = [
+          Response.genText(
+            i18n.__("leadgen.order_number_request", {
+              userFirstName: this.user.firstName,
+              agentFirstName: config.personaCare.name
+            }),
+            "12313"
+          ),
+          // Response.genTextWithPersona(
+          //   i18n.__("care.issue", {
+          //     userFirstName: this.user.firstName,
+          //     agentFirstName: config.personaBilling.name,
+          //     topic: i18n.__("care.billing")
+          //   }),
+          //   config.personaBilling.id
+          // ),
+          // Response.genTextWithPersona(
+          //   i18n.__("care.end"),
+          //   config.personaBilling.id
+          // ),
+          // Survey.genAgentRating(config.personaBilling.name)
+        ];
         break;
       case "CARE_ORDER":
         // Send using the Persona for order issues
